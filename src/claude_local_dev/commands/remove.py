@@ -6,13 +6,16 @@ import typer
 from rich.console import Console
 
 from claude_local_dev.cli import app
-from claude_local_dev.config import get_local_dev_plugins_dir
+import shutil
+
+from claude_local_dev.config import get_local_dev_cache_dir, get_local_dev_plugins_dir
 from claude_local_dev.errors import JunctionError
 from claude_local_dev.junction import is_link, remove_link
 from claude_local_dev.registry import (
     disable_plugin,
     get_installed_plugin,
     remove_installed_plugin,
+    remove_marketplace_plugin,
 )
 
 console = Console()
@@ -37,9 +40,10 @@ def remove(
     # Clean registry first (safer: if junction removal fails, at least
     # the plugin is deregistered and won't load next session)
     remove_installed_plugin(plugin_name)
+    remove_marketplace_plugin(plugin_name)
     disable_plugin(plugin_name)
 
-    # Then remove junction
+    # Remove marketplace junction
     if has_junction:
         try:
             remove_link(link_path)
@@ -50,5 +54,14 @@ def remove(
         console.print(
             f"  [yellow]Warning:[/yellow] {link_path} exists but is not a junction"
         )
+
+    # Remove cache entry
+    cache_dir = get_local_dev_cache_dir() / plugin_name
+    if cache_dir.exists():
+        try:
+            shutil.rmtree(cache_dir)
+            console.print(f"  Cache removed: {cache_dir}")
+        except OSError as e:
+            console.print(f"  [yellow]Warning: cache cleanup failed:[/yellow] {e}")
 
     console.print(f"[green]Plugin removed:[/green] {plugin_name}")

@@ -6,12 +6,13 @@ import typer
 from rich.console import Console
 
 from claude_local_dev.cli import app
-from claude_local_dev.config import get_local_dev_plugins_dir, MARKETPLACE_NAME
+from claude_local_dev.config import get_local_dev_cache_dir, get_local_dev_plugins_dir, MARKETPLACE_NAME
 from claude_local_dev.junction import is_link, is_link_healthy, link_target
 from claude_local_dev.registry import (
     is_marketplace_registered,
     list_enabled_local_dev_plugins,
     list_installed_local_dev_plugins,
+    read_marketplace_manifest,
 )
 
 console = Console()
@@ -38,7 +39,14 @@ def verify() -> None:
             if is_link(entry):
                 junction_names.add(entry.name)
 
-    all_names = enabled_names | installed_names | junction_names
+    # Read marketplace manifest
+    manifest = read_marketplace_manifest()
+    manifest_names = {p["name"] for p in manifest.get("plugins", []) if "name" in p}
+
+    # Cache directory
+    cache_dir = get_local_dev_cache_dir()
+
+    all_names = enabled_names | installed_names | junction_names | manifest_names
 
     for name in sorted(all_names):
         link_path = plugins_dir / name
@@ -73,6 +81,22 @@ def verify() -> None:
                 target = link_target(link_path)
                 issues.append(
                     f"{name}: junction target missing or inaccessible ({target})"
+                )
+
+        # Check: not in marketplace manifest
+        if name in installed_names and name not in manifest_names:
+            issues.append(
+                f"{name}: installed but missing from marketplace.json catalog"
+            )
+
+        # Check: missing cache entry
+        if name in installed_names:
+            installed = list_installed_local_dev_plugins().get(name, [{}])
+            version = installed[0].get("version", "1.0.0") if installed else "1.0.0"
+            cache_path = cache_dir / name / version
+            if not cache_path.exists():
+                issues.append(
+                    f"{name}: no cache entry at {cache_path}"
                 )
 
     # Report

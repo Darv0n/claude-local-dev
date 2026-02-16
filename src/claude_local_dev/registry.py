@@ -19,6 +19,7 @@ from claude_local_dev.config import (
     get_known_marketplaces_path,
     get_local_dev_dir,
     get_local_dev_plugins_dir,
+    get_marketplace_json_path,
     get_settings_path,
 )
 from claude_local_dev.errors import RegistryCorrupted
@@ -229,3 +230,63 @@ def get_plugin_version(plugin_path: Path) -> str:
     """Extract the version from plugin.json, defaulting to 1.0.0."""
     meta = read_plugin_json(plugin_path)
     return meta.get("version", "1.0.0")
+
+
+# --- marketplace.json (plugin catalog) ---
+
+
+_MARKETPLACE_SCHEMA = "https://anthropic.com/claude-code/marketplace.schema.json"
+
+
+def read_marketplace_manifest() -> dict[str, Any]:
+    """Read the marketplace.json manifest, returning a default if missing."""
+    path = get_marketplace_json_path()
+    if not path.exists():
+        return {
+            "$schema": _MARKETPLACE_SCHEMA,
+            "name": MARKETPLACE_NAME,
+            "description": "Local development plugins",
+            "owner": {"name": ""},
+            "plugins": [],
+        }
+    return _read_json(path)
+
+
+def write_marketplace_manifest(data: dict[str, Any]) -> None:
+    _write_json(get_marketplace_json_path(), data)
+
+
+def add_marketplace_plugin(
+    plugin_name: str,
+    description: str,
+    version: str = "1.0.0",
+    author_name: str = "",
+) -> None:
+    """Add or update a plugin entry in marketplace.json."""
+    data = read_marketplace_manifest()
+    plugins = data.setdefault("plugins", [])
+
+    # Remove existing entry if present
+    plugins[:] = [p for p in plugins if p.get("name") != plugin_name]
+
+    plugins.append({
+        "name": plugin_name,
+        "description": description,
+        "version": version,
+        "author": {"name": author_name},
+        "source": f"./plugins/{plugin_name}",
+        "category": "development",
+    })
+
+    write_marketplace_manifest(data)
+
+
+def remove_marketplace_plugin(plugin_name: str) -> None:
+    """Remove a plugin entry from marketplace.json."""
+    path = get_marketplace_json_path()
+    if not path.exists():
+        return
+    data = _read_json(path)
+    plugins = data.get("plugins", [])
+    plugins[:] = [p for p in plugins if p.get("name") != plugin_name]
+    write_marketplace_manifest(data)

@@ -55,4 +55,16 @@ def get_known_marketplaces_path() -> Path:
     return get_plugins_dir() / "known_marketplaces.json"
 
 
+def get_marketplace_json_path() -> Path:
+    return get_local_dev_dir() / ".claude-plugin" / "marketplace.json"
+
+
+def get_cache_dir() -> Path:
+    return get_plugins_dir() / "cache"
+
+
+def get_local_dev_cache_dir() -> Path:
+    return get_cache_dir() / "local-dev"
+
+
 MARKETPLACE_NAME = "local-dev"
